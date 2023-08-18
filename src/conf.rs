@@ -181,7 +181,7 @@ impl Default for AccelScale {
 
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, Debug)]
-/// Gyroscope reading full scale configuration; default: 0.6 mG per LSB
+/// Magnetometer reading full scale configuration; default: 0.6 mG per LSB
 pub enum MagScale {
     /// 0.6 mG per LSB
     _14BITS = 0,
@@ -199,6 +199,32 @@ impl MagScale {
 impl Default for MagScale {
     fn default() -> Self {
         MagScale::_14BITS
+    }
+}
+
+#[allow(non_camel_case_types)]
+#[derive(Copy, Clone, Debug)]
+/// Magnetometer reading mode and sample rate configuration;
+/// default: continuous measurement at 100 Hz sample rate
+pub enum MagMode {
+    /// Power-down mode
+    PowerDown = 0b0000,
+    /// Single measurement mode
+    Single = 0b0001,
+    /// Continuous measurement mode 1 (8 Hz sample rate)
+    Continuous8Hz = 0b0010,
+    /// Continuous measurement mode 2 (100 Hz sample rate)
+    Continuous100Hz = 0b0110,
+    /// External trigger measurement mode
+    ExternalTrigger = 0b0100,
+    /// Self-test mode
+    SelfTest = 0b1000,
+    /// Fuse ROM access mode
+    FuseROM = 0b1111,
+}
+impl Default for MagMode {
+    fn default() -> Self {
+        MagMode::Continuous100Hz
     }
 }
 
@@ -374,6 +400,7 @@ pub struct MpuConfig<MODE> {
     pub(crate) gyro_scale: Option<GyroScale>,
     pub(crate) accel_scale: Option<AccelScale>,
     pub(crate) mag_scale: Option<MagScale>,
+    pub(crate) mag_mode: Option<MagMode>,
     pub(crate) accel_data_rate: Option<AccelDataRate>,
     pub(crate) gyro_temp_data_rate: Option<GyroTempDataRate>,
     pub(crate) sample_rate_divisor: Option<u8>,
@@ -383,7 +410,7 @@ pub struct MpuConfig<MODE> {
 
 impl MpuConfig<types::Imu> {
     /// Creates configuration for [`Imu`] driver (accelerometer + gyroscope).
-    /// with default [`Accel scale`], [`Gyro scale`], [`Mag scale`],
+    /// with default [`Accel scale`], [`Gyro scale`], [`MagScale`], [`MagMode`],
     /// [`AccelDataRate`], [`GyroTempDataRate`],
     /// and no sample rate divisor.
     ///
@@ -396,6 +423,7 @@ impl MpuConfig<types::Imu> {
         MpuConfig { gyro_scale: None,
                     accel_scale: None,
                     mag_scale: None,
+                    mag_mode: None,
                     accel_data_rate: None,
                     gyro_temp_data_rate: None,
                     sample_rate_divisor: None,
@@ -407,7 +435,7 @@ impl MpuConfig<types::Imu> {
 impl MpuConfig<types::Marg> {
     /// Creates configuration for [`Marg`] driver
     /// (accelerometer + gyroscope + magnetometer)
-    /// with default [`Accel scale`], [`Gyro scale`], [`Mag scale`],
+    /// with default [`Accel scale`], [`Gyro scale`], [`MagScale`], [`MagMode`],
     /// [`AccelDataRate`], [`GyroTempDataRate`],
     /// and no sample rate divisor.
     ///
@@ -421,6 +449,7 @@ impl MpuConfig<types::Marg> {
         MpuConfig { gyro_scale: None,
                     accel_scale: None,
                     mag_scale: None,
+                    mag_mode: None,
                     accel_data_rate: None,
                     gyro_temp_data_rate: None,
                     sample_rate_divisor: None,
@@ -433,8 +462,8 @@ impl MpuConfig<types::Marg> {
 impl MpuConfig<types::Dmp> {
     /// Creates configuration for [`Dmp`] driver
     /// (accelerometer + gyroscope + dmp)
-    /// with recommended [`Accel scale`], [`Gyro scale`], [`Mag scale`],
-    /// [`AccelDataRate`], [`GyroTempDataRate`], [`Dmp rate`]
+    /// with recommended [`Accel scale`], [`Gyro scale`], [`MagScale`],
+    /// [`MagMode`], [`AccelDataRate`], [`GyroTempDataRate`], [`Dmp rate`]
     /// and a sample rate of 200Hz. The default [`features`] and the
     /// default [`orientation`] are used
     ///
@@ -451,6 +480,7 @@ impl MpuConfig<types::Dmp> {
         MpuConfig { gyro_scale: Some(GyroScale::_2000DPS),
                     accel_scale: Some(AccelScale::_8G),
                     mag_scale: None,
+                    mag_mode: None,
                     accel_data_rate: Some(AccelDataRate::DlpfConf(Dlpf::_1)),
                     gyro_temp_data_rate:
                         Some(GyroTempDataRate::DlpfConf(Dlpf::_1)),
@@ -655,6 +685,14 @@ impl MpuConfig<types::Marg> {
     /// [`Mag scale`]: ./enum.MagScale.html
     pub fn mag_scale(&mut self, scale: MagScale) -> &mut Self {
         self.mag_scale = Some(scale);
+        self
+    }
+
+    /// Sets magnetrometer mode ([`MagMode`])
+    ///
+    /// [`Magmode`]: ./enum.MagMode.html
+    pub fn mag_mode(&mut self, mode: MagMode) -> &mut Self {
+        self.mag_mode = Some(mode);
         self
     }
 }

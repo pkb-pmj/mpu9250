@@ -116,6 +116,7 @@ pub struct Mpu9250<DEV, MODE> {
     gyro_scale: GyroScale,
     accel_scale: AccelScale,
     mag_scale: MagScale,
+    mag_mode: MagMode,
     gyro_temp_data_rate: GyroTempDataRate,
     accel_data_rate: AccelDataRate,
     sample_rate_divisor: Option<u8>,
@@ -156,9 +157,6 @@ impl<E> core::convert::From<E> for Error<E> {
         Error::BusError(error)
     }
 }
-
-// 2 for 8 Hz, 6 for 100 Hz continuous magnetometer data read
-const MMODE: u8 = 0x06;
 
 /// G constant
 pub const G: f32 = 9.807;
@@ -572,6 +570,7 @@ impl<E, DEV> Mpu9250<DEV, Imu> where DEV: Device<Error = E>
                       gyro_scale: config.gyro_scale.unwrap_or_default(),
                       accel_scale: config.accel_scale.unwrap_or_default(),
                       mag_scale: MagScale::default(),
+                      mag_mode: config.mag_mode.unwrap_or_default(),
                       accel_data_rate: config.accel_data_rate
                                              .unwrap_or_default(),
                       gyro_temp_data_rate: config.gyro_temp_data_rate
@@ -674,6 +673,7 @@ impl<E, DEV> Mpu9250<DEV, Marg>
                       gyro_scale: config.gyro_scale.unwrap_or_default(),
                       accel_scale: config.accel_scale.unwrap_or_default(),
                       mag_scale: config.mag_scale.unwrap_or_default(),
+                      mag_mode: config.mag_mode.unwrap_or_default(),
                       accel_data_rate: config.accel_data_rate
                                              .unwrap_or_default(),
                       gyro_temp_data_rate: config.gyro_temp_data_rate
@@ -744,6 +744,7 @@ impl<E, DEV> Mpu9250<DEV, Marg>
         delay.delay_ms(10);
         // Set magnetometer data resolution and sample ODR
         self._mag_scale()?;
+        self._mag_mode()?;
         delay.delay_ms(10);
 
         AK8963::finalize(&mut self.dev, delay)?;
@@ -897,7 +898,7 @@ impl<E, DEV> Mpu9250<DEV, Marg>
         self.mag_sensitivity_adjustments.into()
     }
 
-    /// Configures magnetrometer full reading scale ([`MagScale`])
+    /// Configures magnetometer full reading scale ([`MagScale`])
     ///
     /// [`Mag scale`]: ./conf/enum.MagScale.html
     pub fn mag_scale(&mut self, scale: MagScale) -> Result<(), E> {
@@ -905,12 +906,31 @@ impl<E, DEV> Mpu9250<DEV, Marg>
         self._mag_scale()
     }
 
+    /// Configures magnetometer reading mode ([`MagMode`])
+    ///
+    /// [`Mag mode`]: ./conf/enum.MagMode.html
+    pub fn mag_mode(&mut self, mode: MagMode) -> Result<(), E> {
+        self.mag_mode = mode;
+        self._mag_mode()
+    }
+
     fn _mag_scale(&mut self) -> Result<(), E> {
-        // Set magnetometer data resolution and sample ODR
+        // Set magnetometer data resolution
         let scale = self.mag_scale as u8;
+        let r = AK8963::read(&mut self.dev, ak8963::Register::CNTL1)?;
         AK8963::write(&mut self.dev,
                       ak8963::Register::CNTL1,
-                      scale << 4 | MMODE)?;
+                      scale << 4 | (r & !0b00010000))?;
+        Ok(())
+    }
+
+    fn _mag_mode(&mut self) -> Result<(), E> {
+        // Set magnetometer sample ODR
+        let mode = self.mag_mode as u8;
+        let r = AK8963::read(&mut self.dev, ak8963::Register::CNTL1)?;
+        AK8963::write(&mut self.dev,
+                      ak8963::Register::CNTL1,
+                      mode | (r & !0b00001111))?;
         Ok(())
     }
 
@@ -951,6 +971,7 @@ impl<E, DEV> Mpu9250<DEV, Dmp> where DEV: Device<Error = E>
                       accel_scale: config.accel_scale
                                          .unwrap_or(AccelScale::_8G),
                       mag_scale: config.mag_scale.unwrap_or_default(),
+                      mag_mode: config.mag_mode.unwrap_or_default(),
                       accel_data_rate:
                           config.accel_data_rate
                                 .unwrap_or(AccelDataRate::DlpfConf(Dlpf::_1)),
@@ -1310,6 +1331,7 @@ impl<E, DEV, MODE> Mpu9250<DEV, MODE> where DEV: Device<Error = E>
         let gyro_scale = self.gyro_scale;
         let accel_scale = self.accel_scale;
         let mag_scale = self.mag_scale;
+        let mag_mode = self.mag_mode;
         let accel_data_rate = self.accel_data_rate;
         let gyro_temp_data_rate = self.gyro_temp_data_rate;
         let sample_rate_divisor = self.sample_rate_divisor;
@@ -1323,6 +1345,7 @@ impl<E, DEV, MODE> Mpu9250<DEV, MODE> where DEV: Device<Error = E>
                          gyro_scale,
                          accel_scale,
                          mag_scale,
+                         mag_mode,
                          accel_data_rate,
                          gyro_temp_data_rate,
                          sample_rate_divisor,
