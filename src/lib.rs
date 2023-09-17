@@ -487,6 +487,60 @@ mod i2c_defs {
             let mpu = Self::new_marg(dev, delay, config)?;
             mpu.reinit_i2c_device(reinit_fn)
         }
+
+        /// Disables I2C bypass mode and configures automatic magnetometer
+        /// reading. Must be called once in order for `read_9dof()` to work.
+        pub fn disable_bypass<D>(
+            &mut self,
+            delay: &mut D)
+            -> Result<(), Error<<I2cDevice<I2C> as device::Device>::Error>>
+            where D: DelayMs<u8>
+        {
+            // Disable bypass
+            const BYPASS_EN: u8 = 1 << 1;
+            self.dev.modify(Register::INT_PIN_CFG, |r| r & !BYPASS_EN)?;
+
+            // Enable the auxiliary master I2C bus
+            const I2C_MST_EN: u8 = 1 << 5;
+            Device::write(&mut self.dev, Register::USER_CTRL, I2C_MST_EN)?;
+
+            // Set aux I2C frequency to 400 KHz (should be configurable?)
+            Device::write(&mut self.dev, Register::I2C_MST_CTRL, 0x0d)?;
+
+            delay.delay_ms(10);
+
+            // Configure magnetometer I2C address and register
+            Device::write(&mut self.dev,
+                          Register::I2C_SLV0_ADDR,
+                          ak8963::I2C_ADDRESS | ak8963::R)?;
+            Device::write(&mut self.dev,
+                          Register::I2C_SLV0_REG,
+                          ak8963::Register::XOUT_L.addr())?;
+            // Read 7 registers
+            const I2C_SLV0_EN: u8 = 1 << 7;
+            const I2C_SLV0_LENG: u8 = 7;
+            Device::write(&mut self.dev,
+                          Register::I2C_SLV0_CTRL,
+                          I2C_SLV0_EN | I2C_SLV0_LENG)?;
+
+            delay.delay_ms(10);
+
+            Ok(())
+        }
+
+        /// Enables I2C bypass mode to configure magnetometer directly.
+        pub fn enable_bypass<D>(
+            &mut self,
+            delay: &mut D)
+            -> Result<(), Error<<I2cDevice<I2C> as device::Device>::Error>>
+            where D: DelayMs<u8>
+        {
+            // Enable bypass
+            const BYPASS_EN: u8 = 1 << 1;
+            self.dev.modify(Register::INT_PIN_CFG, |r| r | BYPASS_EN)?;
+            delay.delay_ms(10);
+            Ok(())
+        }
     }
 
     #[cfg(feature = "dmp")]

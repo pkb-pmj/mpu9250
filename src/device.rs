@@ -417,12 +417,7 @@ impl<I2C, E> NineDOFDevice for I2cDevice<I2C>
                  reg: Register,
                  buffer: &mut [u8; 21])
                  -> Result<(), <Self as Device>::Error> {
-        Device::read_many(self, reg, &mut buffer[0..15])?;
-
-        let xyz_buffer = &mut [0; 7];
-        AK8963::read_xyz(self, xyz_buffer)?;
-        buffer[15..21].copy_from_slice(&xyz_buffer[1..7]);
-
+        self.read_many(reg, buffer)?;
         Ok(())
     }
 }
