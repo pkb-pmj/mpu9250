@@ -51,6 +51,7 @@
 
 #![deny(missing_docs)]
 #![no_std]
+#![feature(type_changing_struct_update)]
 
 #[macro_use]
 extern crate bitflags;
@@ -430,6 +431,23 @@ mod i2c_defs {
             let mpu = Self::new_imu(dev, delay, config)?;
             mpu.reinit_i2c_device(reinit_fn)
         }
+
+        /// Transforms a 6DoF [`Imu`] MPU9250 into a 9DoF [`Marg`] MPU9250 with
+        /// bypass disabled.
+        pub fn into_marg<D>(
+            self,
+            delay: &mut D)
+            -> Result<Mpu9250<I2cDevice<I2C>, Marg>,
+                      Error<<I2cDevice<I2C> as device::Device>::Error>>
+            where D: DelayMs<u8>
+        {
+            let mut mpu9250 = Mpu9250 { _mode: PhantomData,
+                                        ..self };
+            mpu9250.init_ak8963(delay)?;
+            mpu9250.check_ak8963_who_am_i()?;
+            mpu9250.disable_bypass(delay)?;
+            Ok(mpu9250)
+        }
     }
 
     impl<E, I2C> Mpu9250<I2cDevice<I2C>, Marg>
@@ -490,15 +508,16 @@ mod i2c_defs {
 
         /// Disables I2C bypass mode and configures automatic magnetometer
         /// reading. Must be called once in order for `read_9dof()` to work.
-        pub fn disable_bypass<D>(
+        fn disable_bypass<D>(
             &mut self,
             delay: &mut D)
             -> Result<(), Error<<I2cDevice<I2C> as device::Device>::Error>>
             where D: DelayMs<u8>
         {
             // Disable bypass
-            const BYPASS_EN: u8 = 1 << 1;
-            self.dev.modify(Register::INT_PIN_CFG, |r| r & !BYPASS_EN)?;
+            let mut r = self.get_interrupt_config()?;
+            r.remove(InterruptConfig::BYPASS_EN);
+            self.interrupt_config(r)?;
 
             // Enable the auxiliary master I2C bus
             const I2C_MST_EN: u8 = 1 << 5;
@@ -529,15 +548,17 @@ mod i2c_defs {
         }
 
         /// Enables I2C bypass mode to configure magnetometer directly.
-        pub fn enable_bypass<D>(
+        fn enable_bypass<D>(
             &mut self,
             delay: &mut D)
             -> Result<(), Error<<I2cDevice<I2C> as device::Device>::Error>>
             where D: DelayMs<u8>
         {
             // Enable bypass
-            const BYPASS_EN: u8 = 1 << 1;
-            self.dev.modify(Register::INT_PIN_CFG, |r| r | BYPASS_EN)?;
+            let mut r = self.get_interrupt_config()?;
+            r.insert(InterruptConfig::BYPASS_EN);
+            self.interrupt_config(r)?;
+
             delay.delay_ms(10);
             Ok(())
         }
