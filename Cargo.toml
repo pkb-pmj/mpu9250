@@ -18,7 +18,7 @@ linux-embedded-hal = "0.3"
 
 [features]
 # Enable the I2C MPU interface. This disables the SPI interface. All function
-# names remain consistent. Arguments change from (SPI, nCS) pairs to I2C
+# names remain consistent. Arguments change from (SPI, nCS) pairs to (I2C, address) pairs
 i2c = []
 # Enable the use of the internal DMP features
 dmp = ["libm"]
